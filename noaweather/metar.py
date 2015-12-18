@@ -16,6 +16,7 @@ import sys
 import shutil
 from datetime import datetime, timedelta
 import time
+from util import util
 
 from c import c
 from asyncdownload import AsyncDownload
@@ -160,13 +161,10 @@ class Metar:
         
         xpmetar = os.sep.join([self.conf.syspath, 'METAR.rwx'])
         
-        try:
-            shutil.copyfile(path, xpmetar)
-        except:
-            print "Can't override %s" % (xpmetar)
+        util.copy(path, xpmetar)
         
         if not self.conf.keepOldFiles:
-            os.remove(path)
+            util.remove(path)
         
         return updated
     
