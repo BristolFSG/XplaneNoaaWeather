@@ -8,7 +8,7 @@ as published by the Free Software Foundation; either version 2
 of the License, or any later version.
 '''
 
-from math import hypot, atan2, degrees, exp, log, radians, sin, cos, sqrt
+from math import hypot, atan2, degrees, exp, log, radians, sin, cos, sqrt, pi
 
 class c:
     '''
@@ -77,15 +77,33 @@ class c:
         if (alt2 - alt1) == 0:
             print '[XPGFS] BUG: please report: ', t1, t2, alt1, alt2, alt
             return t2
+        
         return t1 + (alt - alt1)*(t2 -t1)/(alt2 -alt1)
     
     @classmethod
-    def interpolateHeading(self, hdg1, hdg2, alt1, alt2, alt):
+    def expoCosineInterpolate(self, t1, t2, alt1, alt2, alt, expo = 3):
+        if alt1 == alt2: return t1
+        x = (alt - alt1) / float(alt2 - alt1)
+        return t1 + (t2 - t1) * x**expo
+    
+    @classmethod
+    def expoCosineInterpolateHeading(self, hdg1, hdg2, alt1, alt2, alt):
         
-        if alt == alt1: return hdg1
-        if alt == alt2: return hdg1 
         if alt1 == alt2: return hdg1
         
+        t2 = self.shortHdg(hdg1, hdg2)
+        t2 = self.expoCosineInterpolate(0, t2, alt1, alt2, alt)
+        t2 += hdg1
+        
+        if t2 < 0:
+            return t2 + 360
+        else:
+            return t2 % 360
+    
+    @classmethod
+    def interpolateHeading(self, hdg1, hdg2, alt1, alt2, alt):
+        if alt1 == alt2: return hdg1
+
         t1 = 0
         t2 = self.shortHdg(hdg1, hdg2)
         
@@ -150,26 +168,6 @@ class c:
     @classmethod
     def pa2inhg(self, pa):
         return pa * 0.0002952998016471232
-    
-    @classmethod
-    def timeTrasition(self, current, new, elapsed, vel=0.5):
-        '''
-        Time based wind speed transition
-        '''
-        if current > new:
-            dir = -1
-        else:
-            dir = 1
-        if abs(current - new) < vel*elapsed + 0.1:
-            return new
-        else:
-            return current + dir * vel * elapsed
-    @classmethod
-    def setTransRefs(self, datarefs):
-        for dataref in datarefs:
-            id = str(dataref)
-            if id in self.transrefs:
-                self.transrefs[id] = dataref.value
     
     @classmethod
     def datarefTransition(self, dataref, new, elapsed, speed=0.25, id=False):
@@ -303,9 +301,9 @@ class c:
             return value
     
     @classmethod
-    def cc2xp(self, cover):
+    def cc2xp_old(self, cover):
         #Cloud cover to X-plane
-        xp = cover/100.0*4
+        xp = int(cover/100.0*4)
         if xp < 1 and cover > 0:
             xp = 1
         elif cover > 89:
@@ -313,24 +311,53 @@ class c:
         return xp
     
     @classmethod
-    def metar2xpprecipitation(self, type, int, mod):
+    def cc2xp(self, cover):
+        # GFS Percent cover to XP
+        if cover < 1:
+            return 0
+        if cover < 30:
+            return 1 #'FEW'
+        if cover < 55:
+            return 2 #'SCT'
+        if cover < 90:
+            return 3 #'BKN'
+        return 4 #'OVC'
+            
+    
+    @classmethod
+    def metar2xpprecipitation(self, kind, intensity, mod, recent):
         ''' Return intensity of a metar precipitation '''
         
         ints = {'-': 0, '': 1, '+': 2} 
-        intensity = ints[int]
-            
-        types = {
+        intensity = ints[intensity]
+        
+        precipitation, friction = False, False
+          
+        precip = {
          'DZ': [0.1, 0.2 , 0.3],
          'RA': [0.3 ,0.5, 0.8],
          'SN': [0.25 ,0.5, 0.8], # Snow
          'SH': [0.7, 0.8,  1]
          }
         
-        if mod in ('SH', 'RE'):
-            type = 'SH'
+        wet = {
+         'DZ': 1,
+         'RA': 1,
+         'SN': 2, # Snow
+         'SH': 1,
+         }
         
-        if type in types:
-            return types[type][intensity]
+        if mod == 'SH':
+            kind = 'SH'
+        
+        if kind in precip:
+            precipitation = precip[kind][intensity]
+        if recent:
+            precipitation = 0
+        if kind in wet:
+            friction = wet[kind]
+        
+        return precipitation, friction
     
     @classmethod
     def strFloat(self, i, false_label = 'na'):
@@ -360,6 +387,10 @@ class c:
         return n * 0.0006213711922373339
     
     @classmethod
+    def m2kn(cls, n):
+        return n * 1852 
+    
+    @classmethod
     def convertForInput(self, value, conversion, toFloat = False, false_str = 'none'):
         # Make conversion and transform to int
         if value is False:
@@ -376,7 +407,7 @@ class c:
         return str(value)
     
     @classmethod
-    def convertFromInput(self, string, conversion, default = False, toFloat = False):
+    def convertFromInput(self, string, conversion, default = False, toFloat = False, max = False, min = False):
         # Convert from str and convert
         value = self.toFloat(string, default)
         
@@ -384,7 +415,7 @@ class c:
             return False
         
         convert = getattr(self, conversion)
-        value = convert(value)
+        value = self.limit(convert(value), max, min)
         
         if toFloat: 
             return value
