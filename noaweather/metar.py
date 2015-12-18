@@ -26,12 +26,13 @@ class Metar:
     '''
     # Metar parse regex
     RE_CLOUD        = re.compile(r'\b(FEW|BKN|SCT|OVC|VV)([0-9]+)([A-Z][A-Z][A-Z]?)?\b')
-    RE_WIND         = re.compile(r'\b([0-9]{3})([0-9]{2,3})(G[0-9]{2,3})?(MPH|KT?|MPS|KMH)\b')
+    RE_WIND         = re.compile(r'\b(VRB|[0-9]{3})([0-9]{2,3})(G[0-9]{2,3})?(MPH|KT?|MPS|KMH)\b')
+    RE_VARIABLE_WIND = re.compile(r'\b([0-9]{3})V([0-9]{3})\b')
     RE_VISIBILITY   = re.compile(r'\b(CAVOK|[PM]?([0-9]{4})|([0-9] )?([0-9]{1,2})(/[0-9])?(SM|KM))\b')
     RE_PRESSURE     = re.compile(r'\b(Q|QNH|SLP|A)[ ]?([0-9]{3,4})\b')
     RE_TEMPERATURE  = re.compile(r'\b(M|-)?([0-9]{1,2})/(M|-)?([0-9]{1,2})\b')
     RE_TEMPERATURE2 = re.compile(r'\bT(0|1)([0-9]{3})(0|1)([0-9]{3})\b')
-    RE_PRECIPITATION = re.compile('(-|\+)?(RE)?(DZ|SG|IC|PL|SH)?(DZ|RA|SN|TS)(NO)?')
+    RE_PRECIPITATION = re.compile('(-|\+)?(RE)?(DZ|SG|IC|PL|SH)?(DZ|RA|SN|TS)(NO|E)?')
     
     METAR_STATIONS_URL = 'http://www.aviationweather.gov/static/adds/metars/stations.txt'
     VATSIM_METAR_STATIONS_URL = 'http://metar.vatsim.net/metar.php?id=all'
@@ -156,6 +157,13 @@ class Metar:
         db.commit()
         
         f.close()
+        
+        xpmetar = os.sep.join([self.conf.syspath, 'METAR.rwx'])
+        
+        try:
+            shutil.copyfile(path, xpmetar)
+        except:
+            print "Can't override %s" % (xpmetar)
         
         if not self.conf.keepOldFiles:
             os.remove(path)
@@ -317,7 +325,6 @@ class Metar:
                 speed = c.m2kn(speed / 1000.0)
                 gust = c.m2kn(gust / 1000.0)
                                 
-                                
             weather['wind'] = [heading, speed, gust]
         
         m = self.RE_VARIABLE_WIND.search(metar)
@@ -328,7 +335,9 @@ class Metar:
         precipitation = {}
         for precp in self.RE_PRECIPITATION.findall(metar):
             intensity, recent, mod, kind, neg = precp
-            if not neg:
+            if neg == 'E':
+                recent = 'RE'
+            if neg != 'NO':
                 precipitation[kind] = {'int': intensity ,'mod': mod, 'recent': recent}
             
         weather['precipitation'] = precipitation

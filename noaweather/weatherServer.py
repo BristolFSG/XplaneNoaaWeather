@@ -87,10 +87,11 @@ class clientHandler(SocketServer.BaseRequestHandler):
                     # Icao
                     response = {}
                     apt = gfs.metar.getMetar(gfs.metar.connection, data[1:])
-                    if len(apt) > 4:
+                    if len(apt) and apt[5]:
                         response['metar'] = gfs.metar.parseMetar(apt[0], apt[5], apt[3])
                     else:
-                        response = [False]
+                        response['metar'] = {'icao': 'METAR STATION',
+                                             'metar': 'NOT AVAILABLE'}
                     
             elif data == '!shutdown':
                 conf.serverSave()
@@ -144,11 +145,13 @@ if __name__ == "__main__":
         server = SocketServer.UDPServer(("localhost", conf.server_port), clientHandler)
     except socket.error:
         print "Can't bind address: %s, port: %d." % ("localhost", conf.server_port)
-        print 'Killing old server with pid %d' % conf.weatherServerPid
-        os.kill(conf.weatherServerPid, signal.SIGTERM)
-        time.sleep(2)
-        conf.serverLoad()
-        server = SocketServer.UDPServer(("localhost", conf.server_port), clientHandler)
+        
+        if conf.weatherServerPid is not False:
+            print 'Killing old server with pid %d' % conf.weatherServerPid
+            os.kill(conf.weatherServerPid, signal.SIGTERM)
+            time.sleep(2)
+            conf.serverLoad()
+            server = SocketServer.UDPServer(("localhost", conf.server_port), clientHandler)
     
     # Save pid
     conf.weatherServerPid = os.getpid()
@@ -170,7 +173,4 @@ if __name__ == "__main__":
     conf.serverSave()
     print 'Server stoped.'
     logfile.close()
-    
-    
-    
     
