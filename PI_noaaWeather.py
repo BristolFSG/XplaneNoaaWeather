@@ -1070,7 +1070,7 @@ class PythonInterface:
                 query = buff[0].strip()
                 if len(query) == 4:
                     self.weather.weatherClientSend('?' + query)
-            XPSetWidgetDescriptor(self.metarQueryOutput, 'Quering, please wait.')
+            	    XPSetWidgetDescriptor(self.metarQueryOutput, 'Quering, please wait.')
                 else:
                     XPSetWidgetDescriptor(self.metarQueryOutput, 'Please insert a valid ICAO code.')
         
